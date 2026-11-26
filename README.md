@@ -50,6 +50,8 @@ docker build "${args[@]}" -t openshell-orca:local .
 | `enable_sandbox_updates` (Helm `gatewayConfig."openshell.gateway".enable_sandbox_updates`) | `true` | Needed by `scripts/update-sandbox`. Read OpenShell's "Activate Sandbox Updates" first. |
 | `persist_workspace` (Docker driver only) | `true` | On Kubernetes the workspace is always a PVC. |
 
+**A proxy in front of the gateway must not time out long streams.** `openshell forward` and the desktop Orca's link to the Orca server are gRPC streams that last for hours. Traefik's default `readTimeout` (60 s) cut them at 61 seconds (2026-11-26); the k3s gateway behind Traefik therefore has its own entrypoint on port 17670 with `readTimeout: 0s`, and the CLI uses `https://<gateway-host>:17670`.
+
 ## Credentials
 
 Import both profiles once per gateway:
@@ -101,7 +103,9 @@ Add the server in Orca (Settings → Remote Orca Servers) with the pairing URL, 
 scripts/update-sandbox --gateway <gateway> my-bot ghcr.io/alvistar/openshell-orca:<tag> --forward 16768
 ```
 
-It stops the sandbox, updates its image with `SandboxUpdates/UpdateSandbox` (there is no CLI command for this), starts it again and restarts the forward. It needs [uv](https://docs.astral.sh/uv/) and the `openshell` CLI logged in to the gateway.
+It stops the sandbox, updates its image with `SandboxUpdates/UpdateSandbox` (there is no CLI command for this), starts it again and restarts the forward. It needs [uv](https://docs.astral.sh/uv/) and the `openshell` CLI logged in to the gateway. On Kubernetes the first update attempt can fail with `ABORTED` (the controller still writes the sandbox's status after the stop): the script reads the resource version again and retries.
+
+Tested 2026-11-26 on the k3s gateway: after an image update the desktop Orca reconnected to the same pairing without pairing again.
 
 ## Development
 
