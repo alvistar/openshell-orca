@@ -28,6 +28,11 @@ asset_sha() {
 
 release stablyai/orca v orca-server-linux-x64.tar.gz orca-server-linux-arm64.tar.gz ORCA
 release openai/codex rust-v codex-x86_64-unknown-linux-musl.tar.gz codex-aarch64-unknown-linux-musl.tar.gz CODEX
+# The code-mode host ships in the same Codex release; Codex's code mode (its
+# JavaScript tool) fails closed without it.
+codex_json=$(gh api repos/openai/codex/releases/latest)
+asset_sha "$codex_json" codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz CODEX_CODE_MODE_SHA256_AMD64
+asset_sha "$codex_json" codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz CODEX_CODE_MODE_SHA256_ARM64
 release cli/cli v 'gh_{v}_linux_amd64.tar.gz' 'gh_{v}_linux_arm64.tar.gz' GH
 
 claude_version=$(curl -fsSL "$claude_base/latest")

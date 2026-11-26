@@ -38,6 +38,11 @@ get "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION:?}/
 tar -xzf codex.tar.gz
 install -m 0755 "codex-${codex_arch}-unknown-linux-musl" "$out/usr/local/bin/codex"
 
+# Codex looks for its code-mode host next to its own binary.
+get "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-code-mode-host-${codex_arch}-unknown-linux-musl.tar.gz" code-mode.tar.gz "$(sha CODEX_CODE_MODE)"
+tar -xzf code-mode.tar.gz
+install -m 0755 "codex-code-mode-host-${codex_arch}-unknown-linux-musl" "$out/usr/local/bin/codex-code-mode-host"
+
 get "https://github.com/cli/cli/releases/download/v${GH_VERSION:?}/gh_${GH_VERSION}_linux_${gh_arch}.tar.gz" gh.tar.gz "$(sha GH)"
 tar -xzf gh.tar.gz
 install -m 0755 "gh_${GH_VERSION}_linux_${gh_arch}/bin/gh" "$out/usr/local/bin/gh"
