@@ -95,7 +95,15 @@ openshell sandbox exec -n my-bot --no-login-shell -- sed -n 's/^Pairing URL: //p
 openshell forward start 16768 my-bot -d
 ```
 
-Add the server in Orca (Settings → Remote Orca Servers) with the pairing URL, then create the bot there. `orca pair` inside the sandbox fails with `network_exposure_failed`: use the URL that `orca serve` prints at start. The server listens on 16768 (`ORCA_PORT`), because a desktop Orca already uses 6768.
+Add the server in Orca (Settings → Remote Orca Servers) with the pairing URL, then create the bot there. The server listens on 16768 (`ORCA_PORT`), because a desktop Orca already uses 6768.
+
+A pairing link works for one device only. For each further device or person, make a new one:
+
+```sh
+openshell sandbox exec -n my-bot --no-login-shell -- orca pair --address 127.0.0.1
+```
+
+`start-orca` binds the server to `0.0.0.0` for this: on loopback only, `orca pair` fails with `network_exposure_failed`. Nothing outside the sandbox reaches the port either way.
 
 ## Update a bot's image
 

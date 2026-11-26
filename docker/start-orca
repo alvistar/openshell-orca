@@ -32,4 +32,8 @@ if [[ -n ${CODEX_AUTH_ACCESS_TOKEN:-} ]]; then
       last_refresh: $at}' >"$HOME/.codex/auth.json"
 fi
 
-exec orca serve --port "$port" --bind 127.0.0.1 --pairing-address 127.0.0.1 >>"$HOME/serve.log" 2>&1
+# --bind 0.0.0.0: `orca pair` (a new one-time link per device) refuses with
+# network_exposure_failed while the server listens on loopback only. Nothing
+# outside reaches it anyway: on Docker the workload has no network, on
+# Kubernetes its NetworkPolicy admits only its supervisor.
+exec orca serve --port "$port" --bind 0.0.0.0 --pairing-address 127.0.0.1 >>"$HOME/serve.log" 2>&1
