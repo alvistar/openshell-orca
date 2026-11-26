@@ -106,3 +106,7 @@ It stops the sandbox, updates its image with `SandboxUpdates/UpdateSandbox` (the
 ## Development
 
 The check command is `prek run --all-files && prek run --all-files --hook-stage manual` (tools from `mise.toml`). CI runs the same.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Orca, Claude Code, Codex and gh keep their own licenses.

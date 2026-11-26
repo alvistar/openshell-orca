@@ -51,6 +51,7 @@ ENV HOME=/sandbox \
 
 LABEL org.opencontainers.image.source="https://github.com/alvistar/openshell-orca" \
       org.opencontainers.image.description="Orca server, Claude Code and Codex for OpenShell sandboxes" \
+      org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.revision="${REVISION}" \
       io.github.alvistar.openshell-orca.orca="${ORCA_VERSION}" \
       io.github.alvistar.openshell-orca.claude="${CLAUDE_VERSION}" \
