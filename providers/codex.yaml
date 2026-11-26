@@ -1,0 +1,65 @@
+# Codex with a ChatGPT login whose refresh the gateway owns, adapted from
+# OpenShell's examples/codex-app-server/codex.yaml. The sandbox receives opaque
+# placeholders for the access token and the account ID; the refresh token stays
+# in the gateway's refresh material and never reaches the sandbox.
+#
+#   openshell profile lint -f providers/codex.yaml
+#   openshell profile import -f providers/codex.yaml
+#
+# Create the provider from a Codex login of its own, never from the one on your
+# workstation: OpenAI rotates refresh tokens, so two holders of one login log
+# each other out. See README.md, "Credentials".
+
+id: codex
+display_name: Codex
+description: OpenAI Codex CLI with gateway-managed token refresh
+category: agent
+inference_capable: true
+credentials:
+  - name: access_token
+    description: Codex OAuth access token refreshed by the gateway
+    env_vars: [CODEX_AUTH_ACCESS_TOKEN]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+    refresh:
+      strategy: oauth2_refresh_token
+      token_url: https://auth.openai.com/oauth/token
+      refresh_before_seconds: 300
+      max_lifetime_seconds: 3600
+      material:
+        - name: client_id
+          description: Codex OAuth client ID
+          required: true
+        - name: refresh_token
+          description: Codex OAuth refresh token
+          required: true
+          secret: true
+  - name: account_id
+    description: ChatGPT account identifier
+    env_vars: [CODEX_AUTH_ACCOUNT_ID]
+    required: true
+    auth_style: header
+    header_name: chatgpt-account-id
+endpoints:
+  - host: api.openai.com
+    port: 443
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+  - host: auth.openai.com
+    port: 443
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+  - host: chatgpt.com
+    port: 443
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+  - host: ab.chatgpt.com
+    port: 443
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+binaries: [/usr/local/bin/codex]

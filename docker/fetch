@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Downloads Orca server, Claude Code, Codex and gh for TARGETARCH, checks each
+# file against its SHA-256 build argument and unpacks it under the given root.
+set -euo pipefail
+
+out=${1:?usage: fetch <output-root>}
+case ${TARGETARCH:?} in
+amd64) orca_arch=x64 claude_arch=x64 codex_arch=x86_64 gh_arch=amd64 suffix=AMD64 ;;
+arm64) orca_arch=arm64 claude_arch=arm64 codex_arch=aarch64 gh_arch=arm64 suffix=ARM64 ;;
+*)
+  echo "unsupported TARGETARCH: $TARGETARCH" >&2
+  exit 1
+  ;;
+esac
+
+sha() {
+  local v="${1}_SHA256_${suffix}"
+  echo "${!v:?missing build argument $v}"
+}
+
+get() { # url file sha256
+  curl -fsSL --retry 3 -o "$2" "$1"
+  echo "$3  $2" | sha256sum -c -
+}
+
+tmp=$(mktemp -d)
+cd "$tmp"
+mkdir -p "$out/opt" "$out/usr/local/bin"
+
+get "https://github.com/stablyai/orca/releases/download/v${ORCA_VERSION:?}/orca-server-linux-${orca_arch}.tar.gz" orca.tar.gz "$(sha ORCA)"
+tar -xzf orca.tar.gz
+mv "orca-server-${ORCA_VERSION}-linux-${orca_arch}" "$out/opt/orca-server"
+
+get "https://downloads.claude.ai/claude-code-releases/${CLAUDE_VERSION:?}/linux-${claude_arch}/claude" claude "$(sha CLAUDE)"
+install -m 0755 claude "$out/usr/local/bin/claude"
+
+get "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION:?}/codex-${codex_arch}-unknown-linux-musl.tar.gz" codex.tar.gz "$(sha CODEX)"
+tar -xzf codex.tar.gz
+install -m 0755 "codex-${codex_arch}-unknown-linux-musl" "$out/usr/local/bin/codex"
+
+get "https://github.com/cli/cli/releases/download/v${GH_VERSION:?}/gh_${GH_VERSION}_linux_${gh_arch}.tar.gz" gh.tar.gz "$(sha GH)"
+tar -xzf gh.tar.gz
+install -m 0755 "gh_${GH_VERSION}_linux_${gh_arch}/bin/gh" "$out/usr/local/bin/gh"
+
+cd /
+rm -rf "$tmp"

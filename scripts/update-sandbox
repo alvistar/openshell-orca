@@ -1,0 +1,91 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["openshell==0.1.10"]
+# ///
+"""Move an OpenShell sandbox to another image, keeping its ID and workspace.
+
+Stops the sandbox, calls openshell.v1.SandboxUpdates/UpdateSandbox (which has
+no CLI command), starts it again and, with --forward, restarts the port
+forward that the stop closed. The gateway must run with
+enable_sandbox_updates = true. Auth is the openshell CLI's own login for the
+gateway (mTLS or OIDC), read from ~/.config/openshell/gateways/<name>/.
+
+    scripts/update-sandbox --gateway pinguino-k8s my-bot \\
+        ghcr.io/alvistar/openshell-orca:<tag> --forward 16768
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+import sys
+import uuid
+
+from openshell import SandboxClient
+from openshell._proto import datamodel_pb2, openshell_pb2, openshell_pb2_grpc
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("sandbox", help="sandbox name")
+    parser.add_argument("image", help="full image reference; use an exact tag, never latest")
+    parser.add_argument("--gateway", required=True, help="gateway name, as `openshell gateway list` shows it")
+    parser.add_argument("--workspace", default="default", help="OpenShell workspace (default: default)")
+    parser.add_argument(
+        "--forward", type=int, metavar="PORT", help="restart `openshell forward` on this port"
+    )
+    parser.add_argument("--timeout", type=float, default=300.0, help="seconds to wait for stop and start")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.image.endswith(":latest") or ":" not in args.image.rsplit("/", 1)[-1]:
+        sys.exit("give an exact image tag, not latest: the tag says what the sandbox runs")
+
+    client = SandboxClient.from_active_cluster(cluster=args.gateway, timeout=args.timeout)
+    scope = datamodel_pb2.WorkspaceSelector(workspace=args.workspace)
+    try:
+        print(f"stopping {args.sandbox}")
+        client.stop(args.sandbox, workspace=args.workspace)
+        client.wait_stopped(args.sandbox, workspace=args.workspace, timeout_seconds=args.timeout)
+
+        sandbox = client._stub.GetSandbox(
+            openshell_pb2.GetSandboxRequest(workspace_scope=scope, name=args.sandbox),
+            timeout=args.timeout,
+        ).sandbox
+        version = sandbox.metadata.resource_version
+        print(f"updating image to {args.image} (resource version {version})")
+        openshell_pb2_grpc.SandboxUpdatesStub(client._channel).UpdateSandbox(
+            openshell_pb2.UpdateSandboxRequest(
+                workspace_scope=scope,
+                name=args.sandbox,
+                image=args.image,
+                expected_resource_version=version,
+                request_id=str(uuid.uuid4()),
+            ),
+            timeout=args.timeout,
+        )
+
+        print(f"starting {args.sandbox}")
+        client.start(args.sandbox, workspace=args.workspace)
+        client.wait_ready(args.sandbox, workspace=args.workspace, timeout_seconds=args.timeout)
+    finally:
+        client.close()
+
+    if args.forward:
+        env = os.environ | {"OPENSHELL_GATEWAY": args.gateway}
+        subprocess.run(
+            ["openshell", "forward", "start", str(args.forward), args.sandbox, "-d"],
+            check=True,
+            env=env,
+            stdin=subprocess.DEVNULL,
+        )
+    print("done")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,9 @@
+# System-wide Codex config (/etc/codex/config.toml); the user's
+# ~/.codex/config.toml on the workspace can still override it.
+
+# The image is the release channel: Codex must not offer its own updates.
+check_for_update_on_startup = false
+
+# OpenShell is the sandbox (Landlock, seccomp, network policy). Codex's own
+# Linux sandbox cannot nest inside it, so Codex runs without one.
+sandbox_mode = "danger-full-access"

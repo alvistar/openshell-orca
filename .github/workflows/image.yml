@@ -1,0 +1,133 @@
+# Builds and publishes ghcr.io/alvistar/openshell-orca.
+#
+# It reads the latest releases of Orca server, Claude Code and Codex. The tag
+# names the three versions and the commit, so the build runs only when that tag
+# does not exist yet. Sandboxes never follow `latest` on their own:
+# scripts/update-sandbox moves them.
+#
+# For now it runs only by hand (Actions → image → Run workflow, or
+# `gh workflow run image`). To build on its own, uncomment the triggers below:
+# every 6 hours for new releases, and on every push to main.
+name: image
+
+on:
+  # schedule:
+  #   - cron: "17 */6 * * *"
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      tag: ${{ steps.versions.outputs.tag }}
+      args: ${{ steps.versions.outputs.args }}
+      exists: ${{ steps.versions.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/resolve-versions > versions.env
+          cat versions.env
+          # shellcheck disable=SC1091
+          source versions.env
+          tag="orca-${ORCA_VERSION}_claude-${CLAUDE_VERSION}_codex-${CODEX_VERSION}_${GITHUB_SHA::7}"
+          if docker buildx imagetools inspect "$IMAGE:$tag" >/dev/null 2>&1; then exists=true; else exists=false; fi
+          echo "tag $tag, already published: $exists"
+          {
+            echo "tag=$tag"
+            echo "exists=$exists"
+            echo "args<<EOF"
+            cat versions.env
+            echo "REVISION=$GITHUB_SHA"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.exists != 'true'
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          build-args: ${{ needs.resolve.outputs.args }}
+          pull: true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - run: |
+          mkdir -p digests
+          touch "digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.runner }}
+          path: digests/*
+          retention-days: 1
+
+  publish:
+    needs: [resolve, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - working-directory: digests
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          # shellcheck disable=SC2046
+          docker buildx imagetools create -t "$IMAGE:$TAG" -t "$IMAGE:latest" \
+            $(printf "$IMAGE@sha256:%s " *)
+          docker buildx imagetools inspect "$IMAGE:$TAG"

@@ -1,0 +1,34 @@
+# Claude Code with a subscription token from `claude setup-token`, injected as a
+# bearer token. OpenShell's stock claude-code profile takes only an API key in
+# x-api-key. Tested 2026-11-26 on OpenShell 0.1.10 with Claude Code 2.1.332: the
+# sandbox sees only an `openshell:resolve:env:...` placeholder in
+# CLAUDE_CODE_OAUTH_TOKEN, Claude Code sends it without checking its shape, and
+# the proxy puts the real token in the request to api.anthropic.com.
+#
+#   openshell profile lint -f providers/claude-code-oauth.yaml
+#   openshell profile import -f providers/claude-code-oauth.yaml
+
+id: claude-code-oauth
+display_name: Claude Code (subscription OAuth token)
+description: Claude Code with a subscription token from `claude setup-token`, injected as a bearer token
+category: agent
+inference_capable: true
+credentials:
+  - name: oauth_token
+    description: Claude subscription OAuth token (claude setup-token)
+    env_vars: [CLAUDE_CODE_OAUTH_TOKEN]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+endpoints:
+  - host: api.anthropic.com
+    port: 443
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+  - host: statsig.anthropic.com
+    port: 443
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+binaries: [/usr/local/bin/claude]

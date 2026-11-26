@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Starts Orca server inside an OpenShell sandbox.
+#
+# When the Codex provider is attached, writes ~/.codex/auth.json from the
+# provider's placeholders: the gateway owns the real tokens and their refresh,
+# so Codex gets no refresh token and must not refresh on its own.
+#
+# The output of the sandbox's main process reaches neither `openshell logs` nor
+# `openshell sandbox connect`, so it goes to ~/serve.log, where the pairing URL
+# is printed at start.
+set -euo pipefail
+
+port=${ORCA_PORT:-16768}
+
+if [[ -n ${CODEX_AUTH_ACCESS_TOKEN:-} ]]; then
+  : "${CODEX_AUTH_ACCOUNT_ID:?the Codex provider must also set CODEX_AUTH_ACCOUNT_ID}"
+  b64url() { base64 -w0 | tr '+/' '-_' | tr -d '='; }
+  now=$(date +%s)
+  # Codex parses the ID token locally; it is identity, not an API credential.
+  id_token="$(jq -cn '{alg: "none", typ: "JWT"}' | b64url).$(
+    jq -cn --argjson now "$now" \
+      '{iss: "https://auth.openai.com", aud: "codex", sub: "openshell-orca", email: "agent@openshell.local", iat: $now, exp: ($now + 3600)}' | b64url
+  ).placeholder"
+  mkdir -p "$HOME/.codex"
+  umask 077
+  jq -n --arg id "$id_token" \
+    --arg access "$CODEX_AUTH_ACCESS_TOKEN" \
+    --arg account "$CODEX_AUTH_ACCOUNT_ID" \
+    --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{auth_mode: "chatgptAuthTokens", OPENAI_API_KEY: null,
+      tokens: {id_token: $id, access_token: $access, refresh_token: "", account_id: $account},
+      last_refresh: $at}' >"$HOME/.codex/auth.json"
+fi
+
+exec orca serve --port "$port" --bind 127.0.0.1 --pairing-address 127.0.0.1 >>"$HOME/serve.log" 2>&1

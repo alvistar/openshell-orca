@@ -1,0 +1,46 @@
+default_install_hook_types: [pre-commit]
+repos:
+  - repo: builtin
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: detect-private-key
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.52.2
+    hooks: [{ id: typos }]
+  - repo: https://github.com/betterleaks/betterleaks
+    rev: v1.10.1
+    hooks: [{ id: betterleaks }]
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks: [{ id: actionlint }]
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.11.0
+    hooks: [{ id: shellcheck }]
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.14.1-1
+    hooks: [{ id: shfmt }]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        types_or: [file]
+        files: ^scripts/update-sandbox$
+      - id: ruff-format
+        types_or: [file]
+        files: ^scripts/update-sandbox$
+  - repo: https://github.com/AleksaC/hadolint-py
+    rev: v2.15.1
+    hooks: [{ id: hadolint }]
+  - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
+    rev: 3.11.1
+    hooks:
+      - id: editorconfig-checker
+        stages: [manual]

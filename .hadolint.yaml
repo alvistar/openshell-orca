@@ -1,0 +1,3 @@
+# DL3008 (pin apt package versions): Ubuntu's archive drops old versions, so
+# pins break the build; each build takes the current security updates instead.
+ignored: [DL3008]

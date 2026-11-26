@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Prints the build arguments for the latest releases of Orca server, Claude
+# Code, Codex and gh, one KEY=VALUE per line, with the SHA-256 of each download
+# for amd64 and arm64. Needs curl, jq and an authenticated gh (GH_TOKEN in CI).
+set -euo pipefail
+
+claude_base=https://downloads.claude.ai/claude-code-releases
+
+# release <owner/repo> <tag-prefix> <asset-for-amd64> <asset-for-arm64> <KEY>
+release() {
+  local json version
+  json=$(gh api "repos/$1/releases/latest")
+  version=$(jq -er --arg p "$2" '.tag_name | ltrimstr($p)' <<<"$json")
+  echo "${5}_VERSION=$version"
+  asset_sha "$json" "${3//\{v\}/$version}" "${5}_SHA256_AMD64"
+  asset_sha "$json" "${4//\{v\}/$version}" "${5}_SHA256_ARM64"
+}
+
+asset_sha() {
+  local sha
+  sha=$(jq -er --arg n "$2" '.assets[] | select(.name == $n) | .digest | ltrimstr("sha256:")' <<<"$1")
+  [[ $sha =~ ^[0-9a-f]{64}$ ]] || {
+    echo "no SHA-256 for asset $2" >&2
+    exit 1
+  }
+  echo "$3=$sha"
+}
+
+release stablyai/orca v orca-server-linux-x64.tar.gz orca-server-linux-arm64.tar.gz ORCA
+release openai/codex rust-v codex-x86_64-unknown-linux-musl.tar.gz codex-aarch64-unknown-linux-musl.tar.gz CODEX
+release cli/cli v 'gh_{v}_linux_amd64.tar.gz' 'gh_{v}_linux_arm64.tar.gz' GH
+
+claude_version=$(curl -fsSL "$claude_base/latest")
+[[ $claude_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "bad Claude version: $claude_version" >&2
+  exit 1
+}
+manifest=$(curl -fsSL "$claude_base/$claude_version/manifest.json")
+echo "CLAUDE_VERSION=$claude_version"
+echo "CLAUDE_SHA256_AMD64=$(jq -er '.platforms["linux-x64"].checksum' <<<"$manifest")"
+echo "CLAUDE_SHA256_ARM64=$(jq -er '.platforms["linux-arm64"].checksum' <<<"$manifest")"

@@ -1,0 +1,21 @@
+# Reference sandbox policy for an Orca bot. Everything not listed is denied.
+# Network access to Anthropic and OpenAI comes from the attached providers
+# (providers/*.yaml), not from this file. Filesystem rules apply only when the
+# sandbox is created: changing them means recreating the sandbox.
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only: [/usr, /lib, /etc, /bin, /proc, /dev/urandom, /var/log, /opt/orca-server]
+  # /dev/pts: without it Landlock blocks terminals and Orca's PTY self-test fails.
+  # /var/tmp: SQLite picks it for temporary files (access() reports it writable,
+  # Landlock does not allow it), and Orca then cannot save chat messages
+  # (SQLITE_CANTOPEN).
+  read_write: [/sandbox, /tmp, /var/tmp, /dev/null, /dev/pts]
+
+landlock:
+  compatibility: hard_requirement
+
+process:
+  run_as_user: "1500"
+  run_as_group: "1500"
